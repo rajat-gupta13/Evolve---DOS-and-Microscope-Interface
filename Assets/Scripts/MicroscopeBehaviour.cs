@@ -11,57 +11,49 @@ public class MicroscopeBehaviour : MonoBehaviour
     
     private RFID RFIDMicroscope = new RFID();           //used for the RFID Scanner
 
+    OscIn _oscIn;
+    OscOut _oscOut;
 
     public string[] boneRFIDTagStings;
     public string[] rockRFIDTagStings;
 
-    public Image microscopeBackgroundImage;
     public Image microscopeScanImage;
     public GameObject imageHolder;
     public Text dataNumber;
 
-    public Sprite startScreen;
-    public Sprite sampleScanned;
-    public Sprite noSampleScanned;
+    public GameObject introduction;
+    public GameObject scanning;
+    public GameObject noSampleScanned;
     public Sprite rockImage;
     public Sprite boneImage;
-
+    private string MICROSCOPEDATAID = "Data #: CMNHSEM0"+ System.DateTime.Now.Month.ToString() + System.DateTime.Now.Day.ToString() + "19_";
     private bool tagPresent = false;
-
-    //private List<MicroscopeSamples> microscopeSamples;
-
     
 
-    //public AudioClip MicroscopeClick;
-    //public AudioClip MicroscopeBackground;
-    //public AudioSource MicroscopeClickSource;
-    //public AudioSource MicroscopeBackgroundSource;
-    private int scanCounter = 0;
+    public AudioSource semSFX;
+    public AudioClip microScope;
 
+   
+    public int scanCounter = 0;
+    private bool audioPlaying = false;
     // Start is called before the first frame update
     void Start()
     {
-        /*
-        microscopeSamples = new List<MicroscopeSamples>();
-        for (int i = 0; i < boneRFIDTagStings.Length; i++)
-        {
-            RFIDTag tag = new RFIDTag();
-            tag.TagString = boneRFIDTagStings[i];
-            tag.Protocol = RFIDProtocol.EM4100;
-            microscopeSamples.Add(new MicroscopeSamples(tag, "bone"));
-        }
-        for (int i = 0; i < rockRFIDTagStings.Length; i++)
-        {
-            RFIDTag tag = new RFIDTag();
-            tag.TagString = rockRFIDTagStings[i];
-            tag.Protocol = RFIDProtocol.EM4100;
-            microscopeSamples.Add(new MicroscopeSamples(tag, "rock"));
-        }
-        */
+
+        _oscIn = gameObject.AddComponent<OscIn>();
+        _oscOut = gameObject.AddComponent<OscOut>();
+
+        _oscIn.Open(8000);
+        _oscOut.Open(8000, "255.255.255.255");
+
+
+        _oscIn.MapInt("/resetsem", ResetMachine);
+
         imageHolder.SetActive(false);
         dataNumber.gameObject.SetActive(false);
-        microscopeBackgroundImage.sprite = startScreen;
-
+        scanning.SetActive(false);
+        noSampleScanned.SetActive(false);
+        introduction.SetActive(true);
         
 
 
@@ -73,7 +65,7 @@ public class MicroscopeBehaviour : MonoBehaviour
         ScanButton.Attach += digitalInput_Attach;
         ScanButton.StateChange += digitalInput_StateChange;
 
-        RFIDMicroscope.DeviceSerialNumber = 452966;
+        RFIDMicroscope.DeviceSerialNumber = 453586;
         RFIDMicroscope.Channel = 0;
         RFIDMicroscope.IsLocal = true;
         RFIDMicroscope.Attach += rfid_Attach;
@@ -92,6 +84,15 @@ public class MicroscopeBehaviour : MonoBehaviour
         }
 
         // StartCoroutine(TurnRFIDAntennaOff());
+    }
+
+    private void ResetMachine(int args)
+    {
+        imageHolder.SetActive(false);
+        dataNumber.gameObject.SetActive(false);
+        scanning.SetActive(false);
+        noSampleScanned.SetActive(false);
+        introduction.SetActive(true);
     }
 
     void OnDestroy()
@@ -163,62 +164,84 @@ public class MicroscopeBehaviour : MonoBehaviour
 
     void digitalInput_StateChange(object sender, Phidget22.Events.DigitalInputStateChangeEventArgs e)
     {
-        UnityMainThreadDispatcher.Instance().Enqueue(ThisWillBeExecutedOnTheMainThread(ScanButton.State));
+       
+            UnityMainThreadDispatcher.Instance().Enqueue(ThisWillBeExecutedOnTheMainThread(ScanButton.State));
+        
+    }
+
+    private IEnumerator WaitTillEndAudio(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        audioPlaying = false;
     }
 
     public IEnumerator ThisWillBeExecutedOnTheMainThread(bool state)
     {
         Debug.Log("This is executed from the main thread");
-        
+
         switch (state)
         {
 
             case true:                    //MicroscopeClickSource.PlayOneShot(MicroscopeClick);
-                    
-                RFIDMicroscope.AntennaEnabled = true;
-                if (tagPresent)
+
+                if (!audioPlaying)
                 {
-                    Debug.Log("Tag scanned: " + RFIDMicroscope.GetLastTag().TagString);
-                    foreach (string x in boneRFIDTagStings)
-                    {
-                        if (x.Equals(RFIDMicroscope.GetLastTag().TagString))
-                        //microscopeSamples.Contains(new MicroscopeSamples(RFIDMicroscope.GetLastTag(), "bone")))
-                        {
-                            imageHolder.SetActive(true);
-                            dataNumber.gameObject.SetActive(true);
-                            scanCounter++;
-                            dataNumber.text = "CMNH042719_" + scanCounter.ToString("00");
-                            microscopeBackgroundImage.sprite = sampleScanned;
-                            microscopeScanImage.sprite = boneImage;
-                            microscopeScanImage.SetNativeSize();
-                            microscopeScanImage.rectTransform.localScale = new Vector3(1, 1, 1);
-                            microscopeScanImage.rectTransform.localPosition = new Vector2(UnityEngine.Random.Range(-398, 398), UnityEngine.Random.Range(-522, 522));
-                            yield return null;
-                        }
-                    }
-                    foreach (string x in rockRFIDTagStings)
-                    {
-                        if (x.Equals(RFIDMicroscope.GetLastTag().TagString))
-                        //microscopeSamples.Contains(new MicroscopeSamples(RFIDMicroscope.GetLastTag(), "rock")))
-                        {
-                            imageHolder.SetActive(true);
-                            dataNumber.gameObject.SetActive(true);
-                            scanCounter++;
-                            dataNumber.text = "CMNH042719_" + scanCounter.ToString("00");
-                            microscopeBackgroundImage.sprite = sampleScanned;
-                            microscopeScanImage.sprite = rockImage;
-                            microscopeScanImage.SetNativeSize();
-                            microscopeScanImage.rectTransform.localScale = new Vector3(2.5f, 2.5f, 1);
-                            microscopeScanImage.rectTransform.localPosition = new Vector2(UnityEngine.Random.Range(-640, 640), UnityEngine.Random.Range(-500, 500));
-                            yield return null;
-                        }
-                    }
-                }
-                else
-                {
+                    audioPlaying = true;
+                    semSFX.clip = microScope;
+                    semSFX.Play();
+                    StartCoroutine(WaitTillEndAudio(microScope.length));
                     imageHolder.SetActive(false);
                     dataNumber.gameObject.SetActive(false);
-                    microscopeBackgroundImage.sprite = noSampleScanned;
+                    scanning.SetActive(true);
+                    noSampleScanned.SetActive(false);
+                    introduction.SetActive(false);
+                    yield return new WaitForSeconds(3.14f);
+                    RFIDMicroscope.AntennaEnabled = true;
+                    if (tagPresent)
+                    {
+                        Debug.Log("Tag scanned: " + RFIDMicroscope.GetLastTag().TagString);
+                        foreach (string x in boneRFIDTagStings)
+                        {
+                            if (x.Equals(RFIDMicroscope.GetLastTag().TagString))
+                            //microscopeSamples.Contains(new MicroscopeSamples(RFIDMicroscope.GetLastTag(), "bone")))
+                            {
+                                imageHolder.SetActive(true);
+                                dataNumber.gameObject.SetActive(true);
+                                scanCounter++;
+                                dataNumber.text = MICROSCOPEDATAID + scanCounter.ToString("00");
+                                scanning.SetActive(false);
+                                microscopeScanImage.sprite = boneImage;
+                                microscopeScanImage.SetNativeSize();
+                                microscopeScanImage.rectTransform.localScale = new Vector3(1, 1, 1);
+                                microscopeScanImage.rectTransform.localPosition = new Vector2(UnityEngine.Random.Range(-398, 398), UnityEngine.Random.Range(-522, 522));
+                                yield return null;
+                            }
+                        }
+                        foreach (string x in rockRFIDTagStings)
+                        {
+                            if (x.Equals(RFIDMicroscope.GetLastTag().TagString))
+                            //microscopeSamples.Contains(new MicroscopeSamples(RFIDMicroscope.GetLastTag(), "rock")))
+                            {
+                                imageHolder.SetActive(true);
+                                dataNumber.gameObject.SetActive(true);
+                                scanCounter++;
+                                dataNumber.text = MICROSCOPEDATAID + scanCounter.ToString("00");
+                                scanning.SetActive(false);
+                                microscopeScanImage.sprite = rockImage;
+                                microscopeScanImage.SetNativeSize();
+                                microscopeScanImage.rectTransform.localScale = new Vector3(2.5f, 2.5f, 1);
+                                microscopeScanImage.rectTransform.localPosition = new Vector2(UnityEngine.Random.Range(-640, 640), UnityEngine.Random.Range(-500, 500));
+                                yield return null;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        imageHolder.SetActive(false);
+                        dataNumber.gameObject.SetActive(false);
+                        scanning.SetActive(false);
+                        noSampleScanned.SetActive(true);
+                    }
                 }
                 break;
             case false:
